@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 // ==========================================
 // SUPABASE CONFIGURATION
@@ -524,6 +525,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
+  Future<void> _launchHealthConnectGuide() async {
+    final Uri url = Uri.parse('https://support.google.com/android/answer/12201227?hl=en');
+    if (!await launchUrl(url)) {
+      throw Exception('Could not launch $url');
+    }
+  }
+
   Future<void> _pushToSupabase() async {
     setState(() => _isSyncing = true);
     
@@ -763,24 +771,69 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const SizedBox(height: 24),
             
             // --- Anonymous ID ---
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFFEFF6FF),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFDBEAFE)),
-              ),
-              child: Column(
-                children: [
-                  const Text('ANONYMOUS IDENTIFIER', 
-                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Color(0xFF60A5FA), letterSpacing: 1)),
-                  const SizedBox(height: 4),
-                  Text(_uuid, 
-                    style: const TextStyle(fontFamily: 'monospace', fontSize: 10, color: Color(0xFF64748B)), textAlign: TextAlign.center),
-                ],
+          //  Container(
+          //    width: double.infinity,
+          //    padding: const EdgeInsets.all(16),
+          //    decoration: BoxDecoration(
+          //     color: const Color(0xFFEFF6FF),
+          //      borderRadius: BorderRadius.circular(16),
+          //      border: Border.all(color: const Color(0xFFDBEAFE)),
+          //    ),
+          //    child: Column(
+          //      children: [
+          //        const Text('ANONYMOUS IDENTIFIER', 
+          //          style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Color(0xFF60A5FA), letterSpacing: 1)),
+          //        const SizedBox(height: 4),
+          //        Text(_uuid, 
+          //          style: const TextStyle(fontFamily: 'monospace', fontSize: 10, color: Color(0xFF64748B)), textAlign: TextAlign.center),
+          //      ],
+          //    ),
+          //  ),
+
+
+          //  const SizedBox(height: 24),
+
+            // --- Troubleshooting Link ---
+            Center(
+              child: GestureDetector(
+                onTap: _launchHealthConnectGuide,
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: Column(
+                    children: [
+                      Text(
+                        "Not seeing your data?",
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF64748B), // Slate 500
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.only(bottom: 2),
+                        decoration: const BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(color: Color(0xFF0D9488), width: 1.5) // Teal underline
+                          )
+                        ),
+                        child: const Text(
+                          "View Health Connect Guide",
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                            color: Color(0xFF0D9488), // Teal 600
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
+
+            
             
             const SizedBox(height: 32),
             
@@ -832,6 +885,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12, fontWeight: FontWeight.bold)),
               ),
             ),
+
+            const SizedBox(height: 32),
+
+            // --- MOVED: Anonymous ID Block ---
+            Center(
+              child: Opacity(
+                opacity: 0.5,
+                child: Column(
+                  children: [
+                    const Text(
+                      'ANONYMOUS IDENTIFIER', 
+                      style: TextStyle(fontSize: 8, fontWeight: FontWeight.w900, color: Color(0xFF94A3B8), letterSpacing: 1.5)
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _uuid, 
+                      style: const TextStyle(fontFamily: 'monospace', fontSize: 10, color: Color(0xFF94A3B8))
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            
+            const SizedBox(height: 16),
           ],
         ),
       ),
