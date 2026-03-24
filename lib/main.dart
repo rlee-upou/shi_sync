@@ -5,23 +5,28 @@ import 'package:health/health.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 // ==========================================
 // SUPABASE CONFIGURATION
 // Replace these placeholders with your actual project credentials
 // ==========================================
-const String SUPABASE_URL = 'https://qjpcoeeqbexpfraqaxjq.supabase.co';
-const String SUPABASE_ANON_KEY = 'sb_publishable_gTEwSJV56GvrPBQfoytsfg_E5OYffpR';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
+  await dotenv.load(fileName: ".env");
   // REQUIRED: Initialize Health plugin for Android Health Connect
   Health().configure();
-  
+  //
+  //await Supabase.initialize(
+  //  url: SUPABASE_URL,
+  //  anonKey: SUPABASE_ANON_KEY,
+  //);
+
   await Supabase.initialize(
-    url: SUPABASE_URL,
-    anonKey: SUPABASE_ANON_KEY,
+  url: dotenv.env['SUPABASE_URL'] ?? '',
+  anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '',
   );
 
   runApp(const ShiApp());
