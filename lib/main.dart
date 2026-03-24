@@ -16,6 +16,8 @@ const String SUPABASE_ANON_KEY = 'sb_publishable_gTEwSJV56GvrPBQfoytsfg_E5OYffpR
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
+  // REQUIRED: Initialize Health plugin for Android Health Connect
+  Health().configure();
   
   await Supabase.initialize(
     url: SUPABASE_URL,
@@ -339,14 +341,6 @@ class _PermissionScreenState extends State<PermissionScreen> {
   bool _isSyncing = false;
   bool _showError = false;
 
-  // ✅ ADD THIS ENTIRE BLOCK:
-  @override
-  void initState() {
-    super.initState();
-    // Initialize the native permission bridge now that the UI is mounted
-    Health().configure(); 
-  }
-
   Future<void> _requestAndSync() async {
     setState(() {
       _isSyncing = true;
@@ -355,14 +349,10 @@ class _PermissionScreenState extends State<PermissionScreen> {
     
     try {
       Health health = Health();
+      // FIX 1: Revert to WORKOUT so it matches the AndroidManifest permissions
       var types = [HealthDataType.STEPS, HealthDataType.WORKOUT];
-
-      // Explicitly tell the plugin we only want READ access
-      var permissions = [HealthDataAccess.READ, HealthDataAccess.READ]; 
       
-      // Pass the permissions array to the authorization request
-      bool requested = await health.requestAuthorization(types, permissions: permissions);
-
+      bool requested = await health.requestAuthorization(types);
       
       if (requested) {
         final prefs = await SharedPreferences.getInstance();
@@ -376,88 +366,58 @@ class _PermissionScreenState extends State<PermissionScreen> {
           types: types
         );
         
-// ==========================================
-        // EDGE COMPUTING: ROLLING AVERAGE LOGIC
-        // ==========================================
-        debugPrint("\n=== SHI-SYNC DATA PIPELINE START ===");
-        debugPrint("1. Raw data points pulled from Health Connect: ${healthData.length}");
+        // EDGE COMPUTING: ROLLING AVERAGE & DAILY LOGIC
+        Map<String, int> dailySteps = {};
+        Map<String, int> dailyMins = {};
         
-        // STEP A & B: Custom Fingerprint Deduplication & Processing
-        List<HealthDataPoint> rawSteps = healthData.where((p) => p.type == HealthDataType.STEPS).toList();
-        
-        // 1. Create a Map to automatically crush duplicates based on their unique fingerprint
+        // FIX 2 & 3: Restore the Fingerprint Deduplicator and correct NumericHealthValue cast
         Map<String, int> uniqueStepChunks = {};
-        
+        List<HealthDataPoint> rawSteps = healthData.where((p) => p.type == HealthDataType.STEPS).toList();
+
         for (var p in rawSteps) {
           var stepsObject = p.value as NumericHealthValue;
           int val = stepsObject.numericValue.toInt();
-          
-          // 2. Generate the unique fingerprint: "StartTime_EndTime_StepCount"
           String fingerprint = "${p.dateFrom.millisecondsSinceEpoch}_${p.dateTo.millisecondsSinceEpoch}_$val";
-          
-          // 3. Store it. Maps cannot have duplicate keys, so exact clones overwrite each other!
           uniqueStepChunks[fingerprint] = val;
         }
 
-        debugPrint("2. Step Deduplication: Reduced ${rawSteps.length} raw points to ${uniqueStepChunks.length} unique points.");
-
-        // 4. Group the cleaned, unique chunks by day
-        Map<String, int> dailySteps = {};
-        int totalMins = 0;
-
-        // We iterate over the raw data again just to match the unique fingerprints back to their dates
         for (var p in rawSteps) {
           var stepsObject = p.value as NumericHealthValue;
           int val = stepsObject.numericValue.toInt();
           String fingerprint = "${p.dateFrom.millisecondsSinceEpoch}_${p.dateTo.millisecondsSinceEpoch}_$val";
           
-          // If this fingerprint is still in our unique map, process it and then remove it so we don't count it twice
           if (uniqueStepChunks.containsKey(fingerprint)) {
             String dateKey = DateFormat('yyyy-MM-dd').format(p.dateFrom);
             dailySteps[dateKey] = (dailySteps[dateKey] ?? 0) + val;
-            
-            // Remove it from the map so future clones in the loop are ignored
-            uniqueStepChunks.remove(fingerprint);
-            
-            debugPrint("Date: $dateKey | Steps: $val | Status: KEPT");
-          } else {
-            // debugPrint("Date: ${DateFormat('yyyy-MM-dd').format(p.dateFrom)} | Steps: $val | Status: DROPPED (Clone)");
+            uniqueStepChunks.remove(fingerprint); // Remove to prevent double counting exact clones
           }
         }
 
-        // STEP C: Process Workouts
+        // FIX 4: Restore the Workout duration calculation logic
         List<HealthDataPoint> workoutData = healthData.where((p) => p.type == HealthDataType.WORKOUT).toList();
         for (var p in workoutData) {
+          String dateKey = DateFormat('yyyy-MM-dd').format(p.dateFrom);
           int durationMins = p.dateTo.difference(p.dateFrom).inMinutes;
-          totalMins += durationMins;
-          debugPrint("   -> Workout Found: ${DateFormat('MMM dd').format(p.dateFrom)} ($durationMins mins)");
+          dailyMins[dateKey] = (dailyMins[dateKey] ?? 0) + durationMins;
         }
 
-        // STEP D: Calculate True Averages
-        debugPrint("\n3. --- Daily Step Breakdown ---");
-        int totalSteps7Days = 0;
-        
-        // Sort the dates so they print in chronological order in the terminal
-        var sortedDates = dailySteps.keys.toList()..sort();
-        for (var dateKey in sortedDates) {
-          int steps = dailySteps[dateKey]!;
-          debugPrint("   Date: $dateKey | Steps: $steps");
-          totalSteps7Days += steps;
-        }
+        // Extract Today's Data
+        String todayKey = DateFormat('yyyy-MM-dd').format(now);
+        int todaySteps = dailySteps[todayKey] ?? 0;
+        int todayMins = dailyMins[todayKey] ?? 0;
 
-        // Strict 7-day average (Divide by 7 to get a true weekly baseline, even if they had 0 steps some days)
-        int avgSteps = (totalSteps7Days / 7).round();
+        // Calculate Averages
+        var activeStepDays = dailySteps.values.where((s) => s > 0).toList();
+        int avgSteps = activeStepDays.isEmpty ? 0 : (activeStepDays.reduce((a, b) => a + b) / activeStepDays.length).round();
         
-        debugPrint("\n4. --- Final Baseline Calculations ---");
-        debugPrint("   Total Steps (7 Days): $totalSteps7Days");
-        debugPrint("   Calculated Daily Average ($totalSteps7Days / 7): $avgSteps steps/day");
-        debugPrint("   Total Workout Minutes (7 Days): $totalMins mins");
-        debugPrint("=== SHI-SYNC DATA PIPELINE END ===\n");
+        var activeMinDays = dailyMins.values.where((s) => s > 0).toList();
+        int avgMins = activeMinDays.isEmpty ? 0 : (activeMinDays.reduce((a, b) => a + b) / activeMinDays.length).round();
 
-        // Save to device storage
         await prefs.setBool('health_permissions_granted', true);
+        await prefs.setInt('today_steps', todaySteps);
+        await prefs.setInt('today_mins', todayMins);
         await prefs.setInt('avg_steps', avgSteps);
-        await prefs.setInt('avg_mins', totalMins);
+        await prefs.setInt('avg_mins', avgMins);
 
         if (mounted) {
           Navigator.of(context).pushReplacement(
@@ -535,8 +495,10 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  int _steps = 0;
-  int _mins = 0;
+  int _todaySteps = 0;
+  int _todayMins = 0;
+  int _avgSteps = 0;
+  int _avgMins = 0;
   String _uuid = '';
   bool _isSyncing = false;
 
@@ -549,8 +511,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
-      _steps = prefs.getInt('avg_steps') ?? 0;
-      _mins = prefs.getInt('avg_mins') ?? 0;
+      _todaySteps = prefs.getInt('today_steps') ?? 0;
+      _todayMins = prefs.getInt('today_mins') ?? 0;
+      _avgSteps = prefs.getInt('avg_steps') ?? 0;
+      _avgMins = prefs.getInt('avg_mins') ?? 0;
       _uuid = prefs.getString('resident_uuid') ?? '';
     });
   }
@@ -578,9 +542,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           .from('activity_logs')
           .insert({
             'resident_id': _uuid,
-            'source_type': 'HEALTH_CONNECT',
-            'daily_steps': _steps,
-            'weekly_exercise_mins': _mins,
+            'source_type': 'FIELD_AGENT',
+            'daily_steps': _avgSteps,
+            'weekly_exercise_mins': _avgMins,
             'local_timestamp': DateTime.now().toIso8601String(),
             'is_synced': true,
           });
@@ -630,42 +594,95 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   child: DecoratedBox(decoration: BoxDecoration(color: Color(0xFF0D9488), shape: BoxShape.circle)),
                 ),
                 const SizedBox(width: 8),
-                const Text('Background Active', 
+                const Text('Background Sync Active', 
                   style: TextStyle(color: Color(0xFF0D9488), fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 0.5)),
               ],
             ),
             const SizedBox(height: 24),
             
-            const Text('Your 7-Day Baseline', 
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Color(0xFF0F172A))),
-            const SizedBox(height: 8),
-            const Text('Averages calculated from your phone sensors.', 
-              style: TextStyle(color: Color(0xFF64748B))),
-            
-            const SizedBox(height: 32),
-            
-            TactileCard(
-              accentColor: const Color(0xFF1E40AF),
+            // --- NEW: Today's Progress ---
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(32),
+                border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
+                boxShadow: [BoxShadow(color: const Color(0xFF64748B).withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 10))],
+              ),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('DAILY STEPS', 
-                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF94A3B8), letterSpacing: 1.2)),
-                      Text(NumberFormat('#,###').format(_steps), 
-                        style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: Color(0xFF1E40AF))),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(color: const Color(0xFFFFEDD5), borderRadius: BorderRadius.circular(12)),
+                        child: const Icon(Icons.local_fire_department, color: Color(0xFFEA580C), size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text("Today's Progress", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
                     ],
                   ),
-                  const Divider(height: 48),
+                  const SizedBox(height: 24),
+                  
+                  // Steps Progress
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      const Text('WEEKLY EXERCISE', 
-                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF94A3B8), letterSpacing: 1.2)),
-                      Text('$_mins mins', 
-                        style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: Color(0xFF0D9488))),
+                      const Text('STEPS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF94A3B8), letterSpacing: 1.2)),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text(NumberFormat('#,###').format(_todaySteps), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Color(0xFF0F172A))),
+                          const SizedBox(width: 4),
+                          const Text('/ 10k', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8))),
+                        ],
+                      )
                     ],
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    height: 12,
+                    width: double.infinity,
+                    decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(6)),
+                    child: FractionallySizedBox(
+                      alignment: Alignment.centerLeft,
+                      widthFactor: (_todaySteps / 10000).clamp(0.0, 1.0),
+                      child: Container(decoration: BoxDecoration(color: const Color(0xFFF97316), borderRadius: BorderRadius.circular(6))),
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 24),
+                  
+                  // Mins Progress
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      const Text('ACTIVE MINS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF94A3B8), letterSpacing: 1.2)),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text(_todayMins.toString(), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Color(0xFF0F172A))),
+                          const SizedBox(width: 4),
+                          const Text('mins', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF94A3B8))),
+                        ],
+                      )
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    height: 12,
+                    width: double.infinity,
+                    decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(6)),
+                    child: FractionallySizedBox(
+                      alignment: Alignment.centerLeft,
+                      widthFactor: (_todayMins / 30).clamp(0.0, 1.0),
+                      child: Container(decoration: BoxDecoration(color: const Color(0xFF14B8A6), borderRadius: BorderRadius.circular(6))),
+                    ),
                   ),
                 ],
               ),
@@ -673,18 +690,86 @@ class _DashboardScreenState extends State<DashboardScreen> {
             
             const SizedBox(height: 24),
             
+            // --- EXISTING (Modified): 7-Day Baseline ---
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(32),
+                border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
+                boxShadow: [BoxShadow(color: const Color(0xFF64748B).withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 10))],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(color: const Color(0xFFE0E7FF), borderRadius: BorderRadius.circular(12)),
+                        child: const Icon(Icons.trending_up, color: Color(0xFF4F46E5), size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text("7-Day Baseline", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  const Text('This is the rolling average securely synced to the Quezon City census database.', 
+                    style: TextStyle(color: Color(0xFF64748B), fontSize: 12, height: 1.4)),
+                  const SizedBox(height: 24),
+                  
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFF1F5F9))),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('AVG STEPS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF94A3B8), letterSpacing: 1.2)),
+                              const SizedBox(height: 4),
+                              Text(NumberFormat('#,###').format(_avgSteps), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF4338CA))),
+                            ],
+                          ),
+                        )
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFF1F5F9))),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('AVG MINS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF94A3B8), letterSpacing: 1.2)),
+                              const SizedBox(height: 4),
+                              Text('$_avgMins', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF0F766E))),
+                            ],
+                          ),
+                        )
+                      ),
+                    ],
+                  )
+                ],
+              ),
+            ),
+            
+            const SizedBox(height: 24),
+            
+            // --- Anonymous ID ---
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF1E40AF).withOpacity(0.05),
+                color: const Color(0xFFEFF6FF),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFF1E40AF).withOpacity(0.1)),
+                border: Border.all(color: const Color(0xFFDBEAFE)),
               ),
               child: Column(
                 children: [
                   const Text('ANONYMOUS IDENTIFIER', 
-                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Color(0xFF1E40AF), letterSpacing: 1)),
+                    style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Color(0xFF60A5FA), letterSpacing: 1)),
                   const SizedBox(height: 4),
                   Text(_uuid, 
                     style: const TextStyle(fontFamily: 'monospace', fontSize: 10, color: Color(0xFF64748B)), textAlign: TextAlign.center),
@@ -692,7 +777,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
             
-            const SizedBox(height: 48),
+            const SizedBox(height: 32),
             
             AnimatedTactileButton(
               onPressed: _isSyncing ? null : _pushToSupabase,
