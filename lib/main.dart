@@ -508,10 +508,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _uuid = '';
   bool _isSyncing = false;
 
+  bool _isRefreshing = false;
+
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _loadData(); // 1. Load the stale cache so the screen paints immediately
+    _fetchFreshHealthData(); // 2. Silently fetch the newest data in the background
   }
 
   Future<void> _loadData() async {
@@ -524,6 +527,93 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _uuid = prefs.getString('resident_uuid') ?? '';
     });
   }
+
+  // NEW FUNCTION: Fetch fresh data from Health Connect
+  Future<void> _fetchFreshHealthData() async {
+    setState(() => _isRefreshing = true);
+    
+    try {
+      Health health = Health();
+      var types = [HealthDataType.STEPS, HealthDataType.WORKOUT];
+      bool hasPermissions = await health.hasPermissions(types) ?? false;
+      
+      if (!hasPermissions) {
+        hasPermissions = await health.requestAuthorization(types);
+      }
+
+      if (hasPermissions) {
+        var now = DateTime.now();
+        var sevenDaysAgo = now.subtract(const Duration(days: 7));
+        
+        List<HealthDataPoint> healthData = await health.getHealthDataFromTypes(
+          startTime: sevenDaysAgo, endTime: now, types: types
+        );
+        
+        // --- DEDUPLICATION & MATH (Same as we built before) ---
+        Map<String, int> dailySteps = {};
+        Map<String, int> dailyMins = {};
+        Map<String, int> uniqueStepChunks = {};
+        
+        List<HealthDataPoint> rawSteps = healthData.where((p) => p.type == HealthDataType.STEPS).toList();
+        for (var p in rawSteps) {
+          var stepsObject = p.value as NumericHealthValue;
+          int val = stepsObject.numericValue.toInt();
+          String fingerprint = "${p.dateFrom.millisecondsSinceEpoch}_${p.dateTo.millisecondsSinceEpoch}_$val";
+          uniqueStepChunks[fingerprint] = val;
+        }
+
+        for (var p in rawSteps) {
+          var stepsObject = p.value as NumericHealthValue;
+          int val = stepsObject.numericValue.toInt();
+          String fingerprint = "${p.dateFrom.millisecondsSinceEpoch}_${p.dateTo.millisecondsSinceEpoch}_$val";
+          if (uniqueStepChunks.containsKey(fingerprint)) {
+            String dateKey = DateFormat('yyyy-MM-dd').format(p.dateFrom);
+            dailySteps[dateKey] = (dailySteps[dateKey] ?? 0) + val;
+            uniqueStepChunks.remove(fingerprint); 
+          }
+        }
+
+        List<HealthDataPoint> workoutData = healthData.where((p) => p.type == HealthDataType.WORKOUT).toList();
+        for (var p in workoutData) {
+          String dateKey = DateFormat('yyyy-MM-dd').format(p.dateFrom);
+          int durationMins = p.dateTo.difference(p.dateFrom).inMinutes;
+          dailyMins[dateKey] = (dailyMins[dateKey] ?? 0) + durationMins;
+        }
+
+        String todayKey = DateFormat('yyyy-MM-dd').format(now);
+        int todaySteps = dailySteps[todayKey] ?? 0;
+        int todayMins = dailyMins[todayKey] ?? 0;
+
+        var activeStepDays = dailySteps.values.where((s) => s > 0).toList();
+        int avgSteps = activeStepDays.isEmpty ? 0 : (activeStepDays.reduce((a, b) => a + b) / activeStepDays.length).round();
+        
+        var activeMinDays = dailyMins.values.where((s) => s > 0).toList();
+        int avgMins = activeMinDays.isEmpty ? 0 : (activeMinDays.reduce((a, b) => a + b) / activeMinDays.length).round();
+
+        // Save to cache
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt('today_steps', todaySteps);
+        await prefs.setInt('today_mins', todayMins);
+        await prefs.setInt('avg_steps', avgSteps);
+        await prefs.setInt('avg_mins', avgMins);
+
+        // Update UI instantly
+        if (mounted) {
+          setState(() {
+            _todaySteps = todaySteps;
+            _todayMins = todayMins;
+            _avgSteps = avgSteps;
+            _avgMins = avgMins;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Background fetch error: $e");
+    } finally {
+      if (mounted) setState(() => _isRefreshing = false);
+    }
+  }
+// ...
 
   Future<void> _launchHealthConnectGuide() async {
     final Uri url = Uri.parse('https://support.google.com/android/answer/12201227?hl=en');
@@ -599,6 +689,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            //Row(
+            //  children: [
+            //    const SizedBox(
+            //      width: 8,
+            //      height: 8,
+            //      child: DecoratedBox(decoration: BoxDecoration(color: Color(0xFF0D9488), shape: BoxShape.circle)),
+            //    ),
+            //    const SizedBox(width: 8),
+            //    const Text('Background Sync Active', 
+            //      style: TextStyle(color: Color(0xFF0D9488), fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 0.5)),
+            //  ],
+            //),
+
             Row(
               children: [
                 const SizedBox(
@@ -609,6 +712,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 const SizedBox(width: 8),
                 const Text('Background Sync Active', 
                   style: TextStyle(color: Color(0xFF0D9488), fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 0.5)),
+                
+                const Spacer(), // Pushes the refresh button to the far right
+                
+                // NEW: The Refresh Button
+                _isRefreshing 
+                  ? const SizedBox(
+                      width: 16, height: 16, 
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0D9488))
+                    )
+                  : InkWell(
+                      onTap: _fetchFreshHealthData,
+                      borderRadius: BorderRadius.circular(12),
+                      child: const Padding(
+                        padding: EdgeInsets.all(4.0),
+                        child: Icon(Icons.refresh, size: 20, color: Color(0xFF94A3B8)),
+                      ),
+                    ),
               ],
             ),
             const SizedBox(height: 24),
