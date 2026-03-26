@@ -513,8 +513,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-    _loadData(); // 1. Load the stale cache so the screen paints immediately
-    _fetchFreshHealthData(); // 2. Silently fetch the newest data in the background
+    _loadData().then((_) {
+      _fetchFreshHealthData(); 
+    });
   }
 
   Future<void> _loadData() async {
@@ -606,6 +607,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
             _avgMins = avgMins;
           });
         }
+
+        // --- NEW: AUTOMATIC SILENT UPLOAD LOGIC ---
+        bool isFirstSession = prefs.getBool('is_first_session') ?? true;
+
+        if (isFirstSession) {
+          // It's a fresh install. Do not upload yet. Let them use Manual Push.
+          await prefs.setBool('is_first_session', false);
+          debugPrint("First session detected. Skipping automatic silent upload.");
+        } else {
+          // It's a succeeding session. Silently push to the database!
+          debugPrint("Succeeding session detected. Triggering silent upload.");
+          await _pushToSupabase(isSilent: true);
+        }
+        
       }
     } catch (e) {
       debugPrint("Background fetch error: $e");
@@ -622,10 +637,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  Future<void> _pushToSupabase() async {
-    setState(() => _isSyncing = true);
+  Future<void> _pushToSupabase({bool isSilent = false}) async {
+    if (!isSilent && mounted) {
+      setState(() => _isSyncing = true);
+    }
     
     try {
+
+      if (_uuid.isEmpty) {
+        debugPrint("Upload aborted: Resident UUID is missing.");
+        return;
+      }
+
       final prefs = await SharedPreferences.getInstance();
       final barangayId = prefs.getInt('resident_barangay_id') ?? 1;
       final ageGroup = prefs.getString('resident_age') ?? '25-34';
@@ -674,22 +697,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
             });
       }
 
-      if (mounted) {
+      if (mounted && !isSilent) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Activity baseline synced successfully!'), backgroundColor: Color(0xFF0D9488)),
         );
       }
     } catch (e) {
       debugPrint("Supabase Error: $e");
-      if (mounted) {
+      if (mounted&& !isSilent) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Sync failed. Check connection.'), backgroundColor: Color(0xFFE11D48)),
         );
       }
     } finally {
-      setState(() => _isSyncing = false);
+        if (mounted && !isSilent) {
+        setState(() => _isSyncing = false);
+        }
+      }
     }
-  }
 
   @override
   Widget build(BuildContext context) {
