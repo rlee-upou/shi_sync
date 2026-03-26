@@ -637,20 +637,42 @@ class _DashboardScreenState extends State<DashboardScreen> {
             'id': _uuid,
             'barangay_id': barangayId,
             'age_group': ageGroup,
-            'primary_source': 'FIELD_AGENT',
+            'primary_source': 'HEALTH_CONNECT',
           });
 
-      // 2. Push Activity Log
-      await Supabase.instance.client
+      // 2. GLOBAL DEDUPLICATION CHECK (One record per resident)
+      final existingLogs = await Supabase.instance.client
           .from('activity_logs')
-          .insert({
-            'resident_id': _uuid,
-            'source_type': 'FIELD_AGENT',
-            'daily_steps': _avgSteps,
-            'weekly_exercise_mins': _avgMins,
-            'local_timestamp': DateTime.now().toIso8601String(),
-            'is_synced': true,
-          });
+          .select('id')
+          .eq('resident_id', _uuid)
+          .limit(1); // Grabs the resident's single record if it exists
+
+      if (existingLogs.isNotEmpty) {
+        // SCENARIO A: Update the resident's existing baseline record
+        await Supabase.instance.client
+            .from('activity_logs')
+            .update({
+              'source_type': 'HEALTH_CONNECT', 
+              'daily_steps': _avgSteps,
+              'weekly_exercise_mins': _avgMins,
+              'local_timestamp': DateTime.now().toIso8601String(), // Refresh the timestamp
+              'is_synced': true,
+            })
+            .eq('id', existingLogs[0]['id']); 
+            
+      } else {
+        // SCENARIO B: Insert new database record (First time syncing)
+        await Supabase.instance.client
+            .from('activity_logs')
+            .insert({
+              'resident_id': _uuid,
+              'source_type': 'HEALTH_CONNECT',
+              'daily_steps': _avgSteps,
+              'weekly_exercise_mins': _avgMins,
+              'local_timestamp': DateTime.now().toIso8601String(),
+              'is_synced': true,
+            });
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
