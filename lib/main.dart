@@ -214,6 +214,7 @@ class SetupScreen extends StatefulWidget {
 class _SetupScreenState extends State<SetupScreen> {
   int _barangayId = 1;
   String _ageGroup = '18-24';
+  String _gender = 'Female'; // NEW
   bool _hasConsented = false;
 
   Future<void> _completeSetup() async {
@@ -223,6 +224,7 @@ class _SetupScreenState extends State<SetupScreen> {
     await prefs.setString('resident_uuid', newUuid);
     await prefs.setInt('resident_barangay_id', _barangayId);
     await prefs.setString('resident_age', _ageGroup);
+    await prefs.setString('resident_gender', _gender); // NEW
     
     if (mounted) {
       Navigator.of(context).pushReplacement(
@@ -286,6 +288,20 @@ class _SetupScreenState extends State<SetupScreen> {
                         return DropdownMenuItem<String>(value: value, child: Text(value, style: const TextStyle(fontWeight: FontWeight.bold)));
                       }).toList(),
                       onChanged: (val) => setState(() => _ageGroup = val!),
+                    ),
+
+                    // INSERT THIS right below the Age Bracket DropdownButton
+                    const Divider(height: 32),
+                    const Text('GENDER AT BIRTH', 
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF94A3B8), letterSpacing: 1.2)),
+                    DropdownButton<String>(
+                      isExpanded: true,
+                      value: _gender,
+                      underline: const SizedBox(),
+                      items: ['Female', 'Male'].map((String value) {
+                        return DropdownMenuItem<String>(value: value, child: Text(value, style: const TextStyle(fontWeight: FontWeight.bold)));
+                      }).toList(),
+                      onChanged: (val) => setState(() => _gender = val!),
                     ),
                   ],
                 ),
@@ -401,11 +417,32 @@ class _PermissionScreenState extends State<PermissionScreen> {
 
         // FIX 4: Restore the Workout duration calculation logic
         List<HealthDataPoint> workoutData = healthData.where((p) => p.type == HealthDataType.WORKOUT).toList();
+        
+        int walkWeekly = 0;
+        int runWeekly = 0;
+        int bikeWeekly = 0;
+        int otherWeekly = 0;
+
         for (var p in workoutData) {
           String dateKey = DateFormat('yyyy-MM-dd').format(p.dateFrom);
           int durationMins = p.dateTo.difference(p.dateFrom).inMinutes;
           dailyMins[dateKey] = (dailyMins[dateKey] ?? 0) + durationMins;
+
+          var workoutValue = p.value as WorkoutHealthValue;
+
+          // Categorize the 7-day totals based on HealthConnect Activity Types
+          if (workoutValue.workoutActivityType == HealthWorkoutActivityType.WALKING) {
+            walkWeekly += durationMins;
+          } else if (workoutValue.workoutActivityType == HealthWorkoutActivityType.RUNNING) {
+            runWeekly += durationMins;
+          } else if (workoutValue.workoutActivityType == HealthWorkoutActivityType.BIKING) {
+            bikeWeekly += durationMins;
+          } else {
+            otherWeekly += durationMins;
+          }
         }
+        
+        int weeklySum = walkWeekly + runWeekly + bikeWeekly + otherWeekly; // Calculate total
 
         // Extract Today's Data
         String todayKey = DateFormat('yyyy-MM-dd').format(now);
@@ -424,6 +461,13 @@ class _PermissionScreenState extends State<PermissionScreen> {
         await prefs.setInt('today_mins', todayMins);
         await prefs.setInt('avg_steps', avgSteps);
         await prefs.setInt('avg_mins', avgMins);
+        
+        // NEW: Save weekly breakdown and sum
+        await prefs.setInt('walk_mins_weekly', walkWeekly);
+        await prefs.setInt('run_mins_weekly', runWeekly);
+        await prefs.setInt('bike_mins_weekly', bikeWeekly);
+        await prefs.setInt('other_mins_weekly', otherWeekly);
+        await prefs.setInt('weekly_exercise_mins', weeklySum);
 
         if (mounted) {
           Navigator.of(context).pushReplacement(
@@ -505,6 +549,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _todayMins = 0;
   int _avgSteps = 0;
   int _avgMins = 0;
+  int _weeklyExerciseMins = 0; // NEW
   String _uuid = '';
   bool _isSyncing = false;
 
@@ -525,6 +570,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _todayMins = prefs.getInt('today_mins') ?? 0;
       _avgSteps = prefs.getInt('avg_steps') ?? 0;
       _avgMins = prefs.getInt('avg_mins') ?? 0;
+      _weeklyExerciseMins = prefs.getInt('weekly_exercise_mins') ?? 0; // NEW
       _uuid = prefs.getString('resident_uuid') ?? '';
     });
   }
@@ -575,11 +621,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
 
         List<HealthDataPoint> workoutData = healthData.where((p) => p.type == HealthDataType.WORKOUT).toList();
+        
+        int walkWeekly = 0;
+        int runWeekly = 0;
+        int bikeWeekly = 0;
+        int otherWeekly = 0;
+
         for (var p in workoutData) {
           String dateKey = DateFormat('yyyy-MM-dd').format(p.dateFrom);
           int durationMins = p.dateTo.difference(p.dateFrom).inMinutes;
           dailyMins[dateKey] = (dailyMins[dateKey] ?? 0) + durationMins;
+
+          var workoutValue = p.value as WorkoutHealthValue;
+
+          // Categorize the 7-day totals based on HealthConnect Activity Types
+          if (workoutValue.workoutActivityType == HealthWorkoutActivityType.WALKING) {
+            walkWeekly += durationMins;
+          } else if (workoutValue.workoutActivityType == HealthWorkoutActivityType.RUNNING) {
+            runWeekly += durationMins;
+          } else if (workoutValue.workoutActivityType == HealthWorkoutActivityType.BIKING) {
+            bikeWeekly += durationMins;
+          } else {
+            otherWeekly += durationMins;
+          }
         }
+        
+        int weeklySum = walkWeekly + runWeekly + bikeWeekly + otherWeekly; // Calculate total
 
         String todayKey = DateFormat('yyyy-MM-dd').format(now);
         int todaySteps = dailySteps[todayKey] ?? 0;
@@ -597,6 +664,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         await prefs.setInt('today_mins', todayMins);
         await prefs.setInt('avg_steps', avgSteps);
         await prefs.setInt('avg_mins', avgMins);
+        
+        // NEW: Save weekly breakdown and sum
+        await prefs.setInt('walk_mins_weekly', walkWeekly);
+        await prefs.setInt('run_mins_weekly', runWeekly);
+        await prefs.setInt('bike_mins_weekly', bikeWeekly);
+        await prefs.setInt('other_mins_weekly', otherWeekly);
+        await prefs.setInt('weekly_exercise_mins', weeklySum);
 
         // Update UI instantly
         if (mounted) {
@@ -605,6 +679,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             _todayMins = todayMins;
             _avgSteps = avgSteps;
             _avgMins = avgMins;
+            _weeklyExerciseMins = weeklySum;
           });
         }
 
@@ -652,6 +727,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final prefs = await SharedPreferences.getInstance();
       final barangayId = prefs.getInt('resident_barangay_id') ?? 1;
       final ageGroup = prefs.getString('resident_age') ?? '25-34';
+      final gender = prefs.getString('resident_gender') ?? 'Female'; // NEW
+      
+      final walkWeekly = prefs.getInt('walk_mins_weekly') ?? 0; // NEW
+      final runWeekly = prefs.getInt('run_mins_weekly') ?? 0;   // NEW
+      final bikeWeekly = prefs.getInt('bike_mins_weekly') ?? 0; // NEW
+      final otherWeekly = prefs.getInt('other_mins_weekly') ?? 0; // NEW
+      final weeklySum = prefs.getInt('weekly_exercise_mins') ?? 0; // NEW
       
       // 1. Ensure Resident Profile Exists
       await Supabase.instance.client
@@ -660,6 +742,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             'id': _uuid,
             'barangay_id': barangayId,
             'age_group': ageGroup,
+            'gender_at_birth': gender, // NEW
             'primary_source': 'HEALTH_CONNECT',
           });
 
@@ -677,7 +760,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
             .update({
               'source_type': 'HEALTH_CONNECT', 
               'daily_steps': _avgSteps,
-              'weekly_exercise_mins': _avgMins,
+              'weekly_exercise_mins': weeklySum, // FIXED: Now uses the actual sum, not the daily average
+              'walking_mins_weekly': walkWeekly,
+              'running_mins_weekly': runWeekly,
+              'biking_mins_weekly': bikeWeekly,
+              'other_sports_mins_weekly': otherWeekly,
               'local_timestamp': DateTime.now().toIso8601String(), // Refresh the timestamp
               'is_synced': true,
             })
@@ -691,7 +778,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               'resident_id': _uuid,
               'source_type': 'HEALTH_CONNECT',
               'daily_steps': _avgSteps,
-              'weekly_exercise_mins': _avgMins,
+              'weekly_exercise_mins': weeklySum, // FIXED: Now uses the actual sum, not the daily average
+              'walking_mins_weekly': walkWeekly,
+              'running_mins_weekly': runWeekly,
+              'biking_mins_weekly': bikeWeekly,
+              'other_sports_mins_weekly': otherWeekly,
               'local_timestamp': DateTime.now().toIso8601String(),
               'is_synced': true,
             });
@@ -704,7 +795,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     } catch (e) {
       debugPrint("Supabase Error: $e");
-      if (mounted&& !isSilent) {
+      if (mounted && !isSilent) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Sync failed. Check connection.'), backgroundColor: Color(0xFFE11D48)),
         );
@@ -924,7 +1015,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             children: [
                               const Text('AVG MINS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF94A3B8), letterSpacing: 1.2)),
                               const SizedBox(height: 4),
-                              Text('$_avgMins', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF0F766E))),
+                              Text('$_weeklyExerciseMins', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF0F766E))),
                             ],
                           ),
                         )
