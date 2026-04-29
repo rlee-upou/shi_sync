@@ -550,6 +550,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _avgSteps = 0;
   int _avgMins = 0;
   int _weeklyExerciseMins = 0; // NEW
+  int _walkWeekly = 0;   // NEW
+  int _runWeekly = 0;    // NEW
+  int _bikeWeekly = 0;   // NEW
+  int _otherWeekly = 0;  // NEW
   String _uuid = '';
   bool _isSyncing = false;
 
@@ -571,6 +575,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _avgSteps = prefs.getInt('avg_steps') ?? 0;
       _avgMins = prefs.getInt('avg_mins') ?? 0;
       _weeklyExerciseMins = prefs.getInt('weekly_exercise_mins') ?? 0; // NEW
+      _walkWeekly = prefs.getInt('walk_mins_weekly') ?? 0;   // NEW
+      _runWeekly = prefs.getInt('run_mins_weekly') ?? 0;     // NEW
+      _bikeWeekly = prefs.getInt('bike_mins_weekly') ?? 0;   // NEW
+      _otherWeekly = prefs.getInt('other_mins_weekly') ?? 0; // NEW
       _uuid = prefs.getString('resident_uuid') ?? '';
     });
   }
@@ -680,6 +688,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             _avgSteps = avgSteps;
             _avgMins = avgMins;
             _weeklyExerciseMins = weeklySum;
+            _walkWeekly = walkWeekly;   // NEW
+            _runWeekly = runWeekly;     // NEW
+            _bikeWeekly = bikeWeekly;   // NEW
+            _otherWeekly = otherWeekly; // NEW
           });
         }
 
@@ -1026,6 +1038,113 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
             
+            const SizedBox(height: 24),
+
+            const SizedBox(height: 24),
+            
+            // --- NEW: Weekly Modalities Breakdown ---
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(32),
+                border: Border.all(color: const Color(0xFFF1F5F9), width: 1.5),
+                boxShadow: [BoxShadow(color: const Color(0xFF64748B).withOpacity(0.05), blurRadius: 20, offset: const Offset(0, 10))],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(color: const Color(0xFFDCFCE7), borderRadius: BorderRadius.circular(12)),
+                        child: const Icon(Icons.directions_run, color: Color(0xFF16A34A), size: 20),
+                      ),
+                      const SizedBox(width: 12),
+                      const Text("Weekly Modalities", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  const Text('Your deliberate exercise breakdown over the last 7 days.', 
+                    style: TextStyle(color: Color(0xFF64748B), fontSize: 12, height: 1.4)),
+                  const SizedBox(height: 24),
+                  
+                  // Row 1: Walk & Run
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFF1F5F9))),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('WALKING', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF94A3B8), letterSpacing: 1.2)),
+                              const SizedBox(height: 4),
+                              Text('${_walkWeekly}m', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF0284C7))),
+                            ],
+                          ),
+                        )
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFF1F5F9))),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('RUNNING', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF94A3B8), letterSpacing: 1.2)),
+                              const SizedBox(height: 4),
+                              Text('${_runWeekly}m', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFFEA580C))),
+                            ],
+                          ),
+                        )
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // Row 2: Bike & Other
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFF1F5F9))),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('BIKING', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF94A3B8), letterSpacing: 1.2)),
+                              const SizedBox(height: 4),
+                              Text('${_bikeWeekly}m', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF9333EA))),
+                            ],
+                          ),
+                        )
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(color: const Color(0xFFF8FAFC), borderRadius: BorderRadius.circular(16), border: Border.all(color: const Color(0xFFF1F5F9))),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('OTHER', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF94A3B8), letterSpacing: 1.2)),
+                              const SizedBox(height: 4),
+                              Text('${_otherWeekly}m', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF475569))),
+                            ],
+                          ),
+                        )
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            
+            // Keep the SizedBox before Troubleshooting Link
             const SizedBox(height: 24),
             
             // --- Anonymous ID ---
