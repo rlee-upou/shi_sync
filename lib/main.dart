@@ -993,7 +993,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         child: const Icon(Icons.trending_up, color: Color(0xFF4F46E5), size: 20),
                       ),
                       const SizedBox(width: 12),
-                      const Text("7-Day Baseline", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                      const Text("Weekly Averages", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -1010,7 +1010,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('AVG STEPS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF94A3B8), letterSpacing: 1.2)),
+                              const Text('DAILY STEPS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF94A3B8), letterSpacing: 1.2)),
                               const SizedBox(height: 4),
                               Text(NumberFormat('#,###').format(_avgSteps), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF4338CA))),
                             ],
@@ -1025,7 +1025,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('AVG MINS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF94A3B8), letterSpacing: 1.2)),
+                              const Text('EXERCISE MINUTES', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF94A3B8), letterSpacing: 1.2)),
                               const SizedBox(height: 4),
                               Text('$_weeklyExerciseMins', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF0F766E))),
                             ],
@@ -1062,11 +1062,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         child: const Icon(Icons.directions_run, color: Color(0xFF16A34A), size: 20),
                       ),
                       const SizedBox(width: 12),
-                      const Text("Weekly Modalities", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+                      const Text("Your Activities", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
                     ],
                   ),
                   const SizedBox(height: 12),
-                  const Text('Your deliberate exercise breakdown over the last 7 days.', 
+                  const Text('Your exercise breakdown over the last 7 days.', 
                     style: TextStyle(color: Color(0xFF64748B), fontSize: 12, height: 1.4)),
                   const SizedBox(height: 24),
                   
@@ -1131,7 +1131,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('OTHER', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF94A3B8), letterSpacing: 1.2)),
+                              const Text('OTHERS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Color(0xFF94A3B8), letterSpacing: 1.2)),
                               const SizedBox(height: 4),
                               Text('${_otherWeekly}m', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Color(0xFF475569))),
                             ],
