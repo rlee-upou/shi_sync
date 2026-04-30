@@ -382,27 +382,36 @@ class _PermissionScreenState extends State<PermissionScreen> {
         var now = DateTime.now();
         var sevenDaysAgo = now.subtract(const Duration(days: 7));
         
+        // We only fetch WORKOUTs here. Steps are aggregated directly via Health Connect.
         List<HealthDataPoint> healthData = await health.getHealthDataFromTypes(
           startTime: sevenDaysAgo, 
           endTime: now, 
-          types: types
+          types: [HealthDataType.WORKOUT] 
         );
         
-        // EDGE COMPUTING: ROLLING AVERAGE & DAILY LOGIC
-        Map<String, int> dailySteps = {};
         Map<String, int> dailyMins = {};
         
-        List<HealthDataPoint> rawSteps = healthData.where((p) => p.type == HealthDataType.STEPS).toList();
+        // Native Health Connect Aggregation for Steps (Handles Deduplication)
+        int todaySteps = 0;
+        int totalWeeklySteps = 0;
+        int activeStepDaysCount = 0;
+        DateTime midnight = DateTime(now.year, now.month, now.day);
 
-        for (var p in rawSteps) {
-          var stepsObject = p.value as NumericHealthValue;
-          int val = stepsObject.numericValue.toInt();
-          String dateKey = DateFormat('yyyy-MM-dd').format(p.dateFrom);
-          dailySteps[dateKey] = (dailySteps[dateKey] ?? 0) + val;
+        for (int i = 0; i < 7; i++) {
+          DateTime start = midnight.subtract(Duration(days: i));
+          DateTime end = (i == 0) ? now : start.add(const Duration(days: 1));
+          
+          int dailyStepCount = (await health.getTotalStepsInInterval(start, end)) ?? 0;
+          if (i == 0) todaySteps = dailyStepCount;
+          
+          if (dailyStepCount > 0) {
+            totalWeeklySteps += dailyStepCount;
+            activeStepDaysCount++;
+          }
         }
 
         // FIX 4: Restore the Workout duration calculation logic
-        List<HealthDataPoint> workoutData = healthData.where((p) => p.type == HealthDataType.WORKOUT).toList();
+        List<HealthDataPoint> workoutData = healthData; // Since we only requested WORKOUT
         
         int walkWeekly = 0;
         int runWeekly = 0;
@@ -432,14 +441,10 @@ class _PermissionScreenState extends State<PermissionScreen> {
 
         // Extract Today's Data
         String todayKey = DateFormat('yyyy-MM-dd').format(now);
-        
-        DateTime midnight = DateTime(now.year, now.month, now.day);
-        int todaySteps = (await health.getTotalStepsInInterval(midnight, now)) ?? (dailySteps[todayKey] ?? 0);
         int todayMins = dailyMins[todayKey] ?? 0;
 
         // Calculate Averages
-        var activeStepDays = dailySteps.values.where((s) => s > 0).toList();
-        int avgSteps = activeStepDays.isEmpty ? 0 : (activeStepDays.reduce((a, b) => a + b) / activeStepDays.length).round();
+        int avgSteps = activeStepDaysCount > 0 ? (totalWeeklySteps / activeStepDaysCount).round() : 0;
         
         var activeMinDays = dailyMins.values.where((s) => s > 0).toList();
         int avgMins = activeMinDays.isEmpty ? 0 : (activeMinDays.reduce((a, b) => a + b) / activeMinDays.length).round();
@@ -614,23 +619,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
         var sevenDaysAgo = now.subtract(const Duration(days: 7));
         
         List<HealthDataPoint> healthData = await health.getHealthDataFromTypes(
-          startTime: sevenDaysAgo, endTime: now, types: types
+          startTime: sevenDaysAgo, endTime: now, types: [HealthDataType.WORKOUT]
         );
         
-        // --- DEDUPLICATION & MATH (Same as we built before) ---
-        Map<String, int> dailySteps = {};
         Map<String, int> dailyMins = {};
         
-        List<HealthDataPoint> rawSteps = healthData.where((p) => p.type == HealthDataType.STEPS).toList();
+        int todaySteps = 0;
+        int totalWeeklySteps = 0;
+        int activeStepDaysCount = 0;
+        DateTime midnight = DateTime(now.year, now.month, now.day);
 
-        for (var p in rawSteps) {
-          var stepsObject = p.value as NumericHealthValue;
-          int val = stepsObject.numericValue.toInt();
-          String dateKey = DateFormat('yyyy-MM-dd').format(p.dateFrom);
-          dailySteps[dateKey] = (dailySteps[dateKey] ?? 0) + val;
+        // Natively pull deduplicated step totals per day
+        for (int i = 0; i < 7; i++) {
+          DateTime start = midnight.subtract(Duration(days: i));
+          DateTime end = (i == 0) ? now : start.add(const Duration(days: 1));
+          
+          int dailyStepCount = (await health.getTotalStepsInInterval(start, end)) ?? 0;
+          if (i == 0) todaySteps = dailyStepCount;
+          
+          if (dailyStepCount > 0) {
+            totalWeeklySteps += dailyStepCount;
+            activeStepDaysCount++;
+          }
         }
 
-        List<HealthDataPoint> workoutData = healthData.where((p) => p.type == HealthDataType.WORKOUT).toList();
+        List<HealthDataPoint> workoutData = healthData;
         
         int walkWeekly = 0;
         int runWeekly = 0;
@@ -659,13 +672,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         int weeklySum = walkWeekly + runWeekly + bikeWeekly + otherWeekly; // Calculate total
 
         String todayKey = DateFormat('yyyy-MM-dd').format(now);
-        
-        DateTime midnight = DateTime(now.year, now.month, now.day);
-        int todaySteps = (await health.getTotalStepsInInterval(midnight, now)) ?? (dailySteps[todayKey] ?? 0);
         int todayMins = dailyMins[todayKey] ?? 0;
 
-        var activeStepDays = dailySteps.values.where((s) => s > 0).toList();
-        int avgSteps = activeStepDays.isEmpty ? 0 : (activeStepDays.reduce((a, b) => a + b) / activeStepDays.length).round();
+        int avgSteps = activeStepDaysCount > 0 ? (totalWeeklySteps / activeStepDaysCount).round() : 0;
         
         var activeMinDays = dailyMins.values.where((s) => s > 0).toList();
         int avgMins = activeMinDays.isEmpty ? 0 : (activeMinDays.reduce((a, b) => a + b) / activeMinDays.length).round();
