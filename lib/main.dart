@@ -584,8 +584,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   // NEW FUNCTION: Fetch fresh data from Health Connect
+  // NEW FUNCTION: Fetch fresh data from Health Connect
   Future<void> _fetchFreshHealthData() async {
-    setState(() => _isRefreshing = true);
+    // 1. Immediately zero out the UI state so the user sees the refresh happening
+    setState(() {
+      _isRefreshing = true;
+      _todaySteps = 0;
+      _todayMins = 0;
+      _avgSteps = 0;
+      _avgMins = 0;
+      _weeklyExerciseMins = 0;
+      _walkWeekly = 0;
+      _runWeekly = 0;
+      _bikeWeekly = 0;
+      _otherWeekly = 0;
+    });
+
+    // 2. Zero out the local SharedPreferences cache (safely keeping UUID and Demographics)
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('today_steps', 0);
+    await prefs.setInt('today_mins', 0);
+    await prefs.setInt('avg_steps', 0);
+    await prefs.setInt('avg_mins', 0);
+    await prefs.setInt('weekly_exercise_mins', 0);
+    await prefs.setInt('walk_mins_weekly', 0);
+    await prefs.setInt('run_mins_weekly', 0);
+    await prefs.setInt('bike_mins_weekly', 0);
+    await prefs.setInt('other_mins_weekly', 0);
     
     try {
       Health health = Health();
