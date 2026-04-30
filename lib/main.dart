@@ -392,27 +392,13 @@ class _PermissionScreenState extends State<PermissionScreen> {
         Map<String, int> dailySteps = {};
         Map<String, int> dailyMins = {};
         
-        // FIX 2 & 3: Restore the Fingerprint Deduplicator and correct NumericHealthValue cast
-        Map<String, int> uniqueStepChunks = {};
         List<HealthDataPoint> rawSteps = healthData.where((p) => p.type == HealthDataType.STEPS).toList();
 
         for (var p in rawSteps) {
           var stepsObject = p.value as NumericHealthValue;
           int val = stepsObject.numericValue.toInt();
-          String fingerprint = "${p.dateFrom.millisecondsSinceEpoch}_${p.dateTo.millisecondsSinceEpoch}_$val";
-          uniqueStepChunks[fingerprint] = val;
-        }
-
-        for (var p in rawSteps) {
-          var stepsObject = p.value as NumericHealthValue;
-          int val = stepsObject.numericValue.toInt();
-          String fingerprint = "${p.dateFrom.millisecondsSinceEpoch}_${p.dateTo.millisecondsSinceEpoch}_$val";
-          
-          if (uniqueStepChunks.containsKey(fingerprint)) {
-            String dateKey = DateFormat('yyyy-MM-dd').format(p.dateFrom);
-            dailySteps[dateKey] = (dailySteps[dateKey] ?? 0) + val;
-            uniqueStepChunks.remove(fingerprint); // Remove to prevent double counting exact clones
-          }
+          String dateKey = DateFormat('yyyy-MM-dd').format(p.dateFrom);
+          dailySteps[dateKey] = (dailySteps[dateKey] ?? 0) + val;
         }
 
         // FIX 4: Restore the Workout duration calculation logic
@@ -446,7 +432,9 @@ class _PermissionScreenState extends State<PermissionScreen> {
 
         // Extract Today's Data
         String todayKey = DateFormat('yyyy-MM-dd').format(now);
-        int todaySteps = dailySteps[todayKey] ?? 0;
+        
+        DateTime midnight = DateTime(now.year, now.month, now.day);
+        int todaySteps = (await health.getTotalStepsInInterval(midnight, now)) ?? (dailySteps[todayKey] ?? 0);
         int todayMins = dailyMins[todayKey] ?? 0;
 
         // Calculate Averages
@@ -632,25 +620,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
         // --- DEDUPLICATION & MATH (Same as we built before) ---
         Map<String, int> dailySteps = {};
         Map<String, int> dailyMins = {};
-        Map<String, int> uniqueStepChunks = {};
         
         List<HealthDataPoint> rawSteps = healthData.where((p) => p.type == HealthDataType.STEPS).toList();
-        for (var p in rawSteps) {
-          var stepsObject = p.value as NumericHealthValue;
-          int val = stepsObject.numericValue.toInt();
-          String fingerprint = "${p.dateFrom.millisecondsSinceEpoch}_${p.dateTo.millisecondsSinceEpoch}_$val";
-          uniqueStepChunks[fingerprint] = val;
-        }
 
         for (var p in rawSteps) {
           var stepsObject = p.value as NumericHealthValue;
           int val = stepsObject.numericValue.toInt();
-          String fingerprint = "${p.dateFrom.millisecondsSinceEpoch}_${p.dateTo.millisecondsSinceEpoch}_$val";
-          if (uniqueStepChunks.containsKey(fingerprint)) {
-            String dateKey = DateFormat('yyyy-MM-dd').format(p.dateFrom);
-            dailySteps[dateKey] = (dailySteps[dateKey] ?? 0) + val;
-            uniqueStepChunks.remove(fingerprint); 
-          }
+          String dateKey = DateFormat('yyyy-MM-dd').format(p.dateFrom);
+          dailySteps[dateKey] = (dailySteps[dateKey] ?? 0) + val;
         }
 
         List<HealthDataPoint> workoutData = healthData.where((p) => p.type == HealthDataType.WORKOUT).toList();
@@ -682,7 +659,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         int weeklySum = walkWeekly + runWeekly + bikeWeekly + otherWeekly; // Calculate total
 
         String todayKey = DateFormat('yyyy-MM-dd').format(now);
-        int todaySteps = dailySteps[todayKey] ?? 0;
+        
+        DateTime midnight = DateTime(now.year, now.month, now.day);
+        int todaySteps = (await health.getTotalStepsInInterval(midnight, now)) ?? (dailySteps[todayKey] ?? 0);
         int todayMins = dailyMins[todayKey] ?? 0;
 
         var activeStepDays = dailySteps.values.where((s) => s > 0).toList();
