@@ -19,11 +19,6 @@ Future<void> main() async {
   await dotenv.load(fileName: ".env");
   // REQUIRED: Initialize Health plugin for Android Health Connect
   Health().configure();
-  //
-  //await Supabase.initialize(
-  //  url: SUPABASE_URL,
-  //  anonKey: SUPABASE_ANON_KEY,
-  //);
 
   await Supabase.initialize(
   url: dotenv.env['SUPABASE_URL'] ?? '',
@@ -576,8 +571,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
-  // NEW FUNCTION: Fetch fresh data from Health Connect
-  // NEW FUNCTION: Fetch fresh data from Health Connect
+  // Fetch fresh data from Health Connect
   Future<void> _fetchFreshHealthData() async {
     // 1. Immediately zero out the UI state so the user sees the refresh happening
     setState(() {
@@ -785,7 +779,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             .update({
               'source_type': 'HEALTH_CONNECT', 
               'daily_steps': _avgSteps,
-              'weekly_exercise_mins': weeklySum, // FIXED: Now uses the actual sum, not the daily average
+              'weekly_exercise_mins': weeklySum, 
               'walking_mins_weekly': walkWeekly,
               'running_mins_weekly': runWeekly,
               'biking_mins_weekly': bikeWeekly,
@@ -803,7 +797,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               'resident_id': _uuid,
               'source_type': 'HEALTH_CONNECT',
               'daily_steps': _avgSteps,
-              'weekly_exercise_mins': weeklySum, // FIXED: Now uses the actual sum, not the daily average
+              'weekly_exercise_mins': weeklySum, 
               'walking_mins_weekly': walkWeekly,
               'running_mins_weekly': runWeekly,
               'biking_mins_weekly': bikeWeekly,
@@ -852,18 +846,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            //Row(
-            //  children: [
-            //    const SizedBox(
-            //      width: 8,
-            //      height: 8,
-            //      child: DecoratedBox(decoration: BoxDecoration(color: Color(0xFF0D9488), shape: BoxShape.circle)),
-            //    ),
-            //    const SizedBox(width: 8),
-            //    const Text('Background Sync Active', 
-            //      style: TextStyle(color: Color(0xFF0D9488), fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 0.5)),
-            //  ],
-            //),
 
             Row(
               children: [
@@ -876,9 +858,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 const Text('Background Sync Active', 
                   style: TextStyle(color: Color(0xFF0D9488), fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 0.5)),
                 
-                const Spacer(), // Pushes the refresh button to the far right
+                const Spacer(),
                 
-                // NEW: The Refresh Button
+                // Refresh Button
                 _isRefreshing 
                   ? const SizedBox(
                       width: 16, height: 16, 
@@ -896,7 +878,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             const SizedBox(height: 24),
             
-            // --- NEW: Today's Progress ---
+            // --- Today's Progress ---
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
@@ -986,7 +968,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             
             const SizedBox(height: 24),
             
-            // --- EXISTING (Modified): 7-Day Baseline ---
+            // --- 7-Day Baseline ---
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
@@ -1055,7 +1037,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
             const SizedBox(height: 24),
             
-            // --- NEW: Weekly Modalities Breakdown ---
+            // --- Weekly Modalities Breakdown ---
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
@@ -1160,29 +1142,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             // Keep the SizedBox before Troubleshooting Link
             const SizedBox(height: 24),
             
-            // --- Anonymous ID ---
-          //  Container(
-          //    width: double.infinity,
-          //    padding: const EdgeInsets.all(16),
-          //    decoration: BoxDecoration(
-          //     color: const Color(0xFFEFF6FF),
-          //      borderRadius: BorderRadius.circular(16),
-          //      border: Border.all(color: const Color(0xFFDBEAFE)),
-          //    ),
-          //    child: Column(
-          //      children: [
-          //        const Text('ANONYMOUS IDENTIFIER', 
-          //          style: TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Color(0xFF60A5FA), letterSpacing: 1)),
-          //        const SizedBox(height: 4),
-          //        Text(_uuid, 
-          //          style: const TextStyle(fontFamily: 'monospace', fontSize: 10, color: Color(0xFF64748B)), textAlign: TextAlign.center),
-          //      ],
-          //    ),
-          //  ),
-
-
-          //  const SizedBox(height: 24),
-
             // --- Troubleshooting Link ---
             Center(
               child: GestureDetector(
@@ -1278,7 +1237,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
             const SizedBox(height: 32),
 
-            // --- MOVED: Anonymous ID Block ---
+            // --- Anonymous ID Block ---
             Center(
               child: Opacity(
                 opacity: 0.5,
